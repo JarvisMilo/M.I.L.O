@@ -25,6 +25,7 @@ class Capability(Enum):
     AGENTS = "agents.route"
     DEVICES = "devices.control"
     HIGH_IMPACT = "actions.high_impact"
+    SYSTEM_CONTROL = "system.control"
 
 
 @dataclass(frozen=True)
@@ -104,6 +105,19 @@ class Gateway:
                 report[name] = {"status": "failed", "error": str(error)}
         return report
 
+    def is_enabled(self) -> bool:
+        state = self.state.get_state("system.enabled")
+        return True if state is None else bool(state.get("enabled", True))
+
+    def set_enabled(self, principal: Principal, enabled: bool, correlation_id: str = "") -> None:
+        if Capability.SYSTEM_CONTROL not in principal.capabilities:
+            self.state.audit(principal, "system.set_enabled", "denied", {"enabled": enabled}, correlation_id)
+            raise PermissionError(f"{principal.id} no tiene capacidad {Capability.SYSTEM_CONTROL.value}")
+        self.state.set_state("system.enabled", {"enabled": enabled})
+        status = "enabled" if enabled else "disabled"
+        self.state.audit(principal, "system.set_enabled", status, {"enabled": enabled}, correlation_id)
+        self.events.publish(Event(f"system.{status}", {"enabled": enabled}, "gateway", correlation_id), self.retry)
+
     def voice_turn(self, principal: Principal, correlation_id: str = "") -> str | None:
         return self._perform(principal, Capability.VOICE, "voice.turn", {}, correlation_id, lambda: self._required(self.voice, "voice").run_turn())
 
@@ -129,6 +143,9 @@ class Gateway:
         if capability not in principal.capabilities:
             self.state.audit(principal, action, "denied", detail, correlation_id)
             raise PermissionError(f"{principal.id} no tiene capacidad {capability.value}")
+        if not self.is_enabled():
+            self.state.audit(principal, action, "denied", {**detail, "reason": "system_disabled"}, correlation_id)
+            raise RuntimeError("M.I.L.O. está desactivado.")
         if high_impact and not self._confirm(principal, action, detail, True):
             self.state.audit(principal, action, "denied", detail, correlation_id)
             raise PermissionError("La acción de alto impacto requiere confirmación humana.")

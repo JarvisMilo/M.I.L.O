@@ -9,6 +9,7 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class Settings:
+    enabled: bool = True
     record_seconds: float = 5.0
     sample_rate: int = 16_000
     vad_threshold: float = 0.5
@@ -26,6 +27,7 @@ class Settings:
     def from_env(cls) -> "Settings":
         piper_model = os.getenv("MILO_PIPER_MODEL")
         return cls(
+            enabled=os.getenv("MILO_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"},
             record_seconds=float(os.getenv("MILO_RECORD_SECONDS", "5")),
             sample_rate=int(os.getenv("MILO_SAMPLE_RATE", "16000")),
             vad_threshold=float(os.getenv("MILO_VAD_THRESHOLD", "0.5")),

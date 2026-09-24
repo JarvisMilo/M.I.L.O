@@ -56,3 +56,19 @@ class GatewayTests(unittest.TestCase):
             gateway.register_health_check("bad", lambda: (_ for _ in ()).throw(RuntimeError("offline")))
             self.assertEqual(gateway.health()["ok"]["status"], "ok")
             self.assertEqual(gateway.health()["bad"]["status"], "failed")
+
+    def test_system_control_can_disable_all_gateway_actions(self) -> None:
+        class Voice:
+            def run_turn(self) -> str:
+                return "hola"
+
+        with TemporaryDirectory() as temporary:
+            gateway = Gateway(SQLitePlatformState(Path(temporary) / "platform.sqlite3"), voice=Voice())
+            operator = Principal("operator", frozenset({Capability.SYSTEM_CONTROL}))
+            gateway.set_enabled(operator, False, "shutdown-1")
+            self.assertFalse(gateway.is_enabled())
+            user = Principal("desktop", frozenset({Capability.VOICE}))
+            with self.assertRaisesRegex(RuntimeError, "desactivado"):
+                gateway.voice_turn(user)
+            gateway.set_enabled(operator, True)
+            self.assertEqual(gateway.voice_turn(user), "hola")

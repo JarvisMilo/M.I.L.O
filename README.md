@@ -48,6 +48,17 @@
 4. **Operación:** añadir health checks de cada proveedor y suscriptores de
    auditoría; mantener los contratos para evitar un rewrite total.
 
+## Checklist antes de subir de nivel
+
+| Criterio | Estado actual | Verificación |
+| --- | --- | --- |
+| La capa funciona sin pasos manuales ocultos | Listo para prueba integrada | `python main.py` con los proveedores configurados; las pruebas usan dobles deterministas. |
+| Latencia y fallos medibles | Implementado | Logs por etapa/turno, eventos, auditoría y health checks. |
+| Permisos claros por acción | Implementado | `Gateway` exige capacidades y registra denegaciones. |
+| Cambio de proveedor | Implementado | Protocolos de voz, dispositivo, memoria, tools y agentes desacoplados. |
+| Desactivación del sistema | Implementado | `MILO_ENABLED=false` evita arrancar el PTT; `Gateway.set_enabled()` requiere `SYSTEM_CONTROL` y bloquea nuevas acciones. |
+| El siguiente nivel resuelve un problema real | Pendiente de decisión | No añadir nivel hasta elegir una necesidad observable y medir su impacto. |
+
 Asistente de voz **local-first** y modular con *push-to-talk* (PTT). El flujo
 del primer nivel es deliberadamente pequeño:
 

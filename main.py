@@ -165,7 +165,11 @@ def build_pipeline(settings: Settings) -> VoicePipeline:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    pipeline = build_pipeline(Settings.from_env())
+    settings = Settings.from_env()
+    if not settings.enabled:
+        logging.warning("M.I.L.O. está desactivado por MILO_ENABLED=false.")
+        return
+    pipeline = build_pipeline(settings)
     print("PTT listo. Pulsa Intro para empezar; vuelve a pulsarlo para terminar. Escribe q para salir.")
     while input("> ").strip().lower() != "q":
         stop_recording = threading.Event()
