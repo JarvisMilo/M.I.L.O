@@ -1,5 +1,53 @@
 # M.I.L.O. — Nivel 01: haz que hable
 
+## Plataforma orientada a eventos (migración incremental)
+
+```text
+┌─────────────── Superficies sin cerebro ────────────────┐
+│ escritorio / móvil / terminal: captura, muestra, envía │
+└───────────────────────────┬────────────────────────────┘
+                            │ APIs estables
+                    ┌───────▼────────┐       eventos       ┌──────────────┐
+                    │ Gateway local  │────────────────────►│ EventBus     │
+                    │ capacidades    │                     │ reintentos   │
+                    │ auditoría/HITL │◄────────────────────│ suscriptores │
+                    └───┬────┬────┬──┘                     └──────────────┘
+                        │    │    │
+             ┌──────────▼┐ ┌─▼────▼──┐ ┌──────────▼────────┐
+             │ voz       │ │ memoria │ │ tools/agentes/dev. │
+             │ pipeline  │ │ SQLite  │ │ adaptadores locales│
+             └───────────┘ └─────────┘ └───────────────────┘
+```
+
+### Contratos estables
+
+* `Gateway.voice_turn`, `memory_search`, `memory_save`, `invoke_tool`,
+  `run_agents` y `device_action` son las únicas APIs de plataforma; cada una
+  exige una `Principal` con la `Capability` mínima necesaria.
+* `Event(type, payload, source, correlation_id)` es el contrato de integración
+  asíncrona. El bus entrega eventos con reintentos acotados y no convierte un
+  error de suscriptor en una caída del gateway.
+* `VoiceAPI` y `DeviceAPI` son puertos de proveedor; escritorio y móvil son
+  superficies que llaman al gateway, nunca réplicas del orquestador ni de la
+  lógica de dominio.
+* `SQLitePlatformState` persiste estado operativo y auditoría. `health()`
+  ejecuta comprobaciones registradas y aísla sus fallos.
+* Acciones de dispositivo son de alto impacto por defecto. Tools con
+  `CONFIRMATION_REQUIRED` también exigen capacidad `HIGH_IMPACT` y confirmación
+  humana antes de que el gateway las ejecute.
+
+### Plan de migración
+
+1. **Ahora:** envolver los adaptadores existentes sin modificar el pipeline;
+   ejecutar el gateway y su EventBus dentro del proceso local.
+2. **Después:** mover las superficies de escritorio/móvil a clientes finos que
+   usen las APIs del gateway y consuman eventos por `correlation_id`.
+3. **Escala:** sustituir implementaciones de puertos por procesos o cloud sólo
+   cuando mejoren calidad o latencia de forma medible; voz, memoria frecuente y
+   auditoría permanecen locales por defecto.
+4. **Operación:** añadir health checks de cada proveedor y suscriptores de
+   auditoría; mantener los contratos para evitar un rewrite total.
+
 Asistente de voz **local-first** y modular con *push-to-talk* (PTT). El flujo
 del primer nivel es deliberadamente pequeño:
 
