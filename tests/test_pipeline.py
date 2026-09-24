@@ -5,6 +5,7 @@ import unittest
 
 from config import Settings
 from main import PipelineState, VoicePipeline
+from llm import LLMToolResponse
 
 
 class Recorder:
@@ -31,6 +32,17 @@ class STT:
 class LLM:
     def respond(self, text: str) -> str:
         return f"respuesta a {text}"
+
+
+class ToolLLM:
+    def respond(self, text: str) -> str:
+        return text
+
+    def respond_with_tools(self, text: str, tools: list[dict]) -> LLMToolResponse:
+        return LLMToolResponse("", [{"id": "call-1", "function": {"name": "calculate", "arguments": {"expression": "2 + 2"}}}])
+
+    def respond_after_tools(self, text: str, response: LLMToolResponse, results: list[dict]) -> str:
+        return f"el resultado es {results[0]['result']['value']}"
 
 
 class TTS:
@@ -87,6 +99,11 @@ class PipelineTests(unittest.TestCase):
             stop_event = threading.Event()
             pipeline.run_turn(stop_event)
             self.assertIs(recorder.stop_event, stop_event)
+
+    def test_registered_tool_call_is_executed_and_returned_to_model(self) -> None:
+        with TemporaryDirectory() as temporary:
+            pipeline = VoicePipeline(Settings(data_dir=Path(temporary)), Recorder(), STT(), ToolLLM(), TTS(), Speaker())
+            self.assertEqual(pipeline.run_turn(), "el resultado es 4")
 
     def test_empty_transcript_skips_llm_tts_and_playback(self) -> None:
         with TemporaryDirectory() as temporary:

@@ -11,6 +11,17 @@ No incluye UI, memoria, agentes, wake word ni servicios de infraestructura. El
 PTT se estabiliza primero; `openWakeWord` puede añadirse más adelante como otro
 disparador de la misma máquina de estados.
 
+## Herramientas seguras
+
+El LLM puede solicitar herramientas, pero nunca ejecuta código, comandos ni
+rutas arbitrarias. Sólo se aceptan nombres registrados y argumentos validados
+contra un esquema JSON. Las herramientas incluidas son de sólo lectura:
+`get_current_time`, `calculate` (aritmética limitada, sin `eval`) y
+`get_runtime_info`. Cada llamada registra herramienta, argumentos, resultado,
+duración y error. Una herramienta futura marcada como irreversible o
+destructiva requiere una devolución explícita de `confirm_tool` antes de
+ejecutarse; si no existe o rechaza la llamada, se bloquea.
+
 ## Arquitectura
 
 Cada etapa depende de una interfaz (`Protocol`), no de una implementación de

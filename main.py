@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
 from typing import Callable
@@ -15,6 +16,7 @@ from config import Settings
 from llm import LLMProvider, OllamaLLM
 from stt import FasterWhisperSTT, STTProvider
 from tts import PiperTTS, TTSProvider
+from tools import ConfirmationCallback, ToolCall, ToolRegistry, default_registry
 from vad import SileroVAD, VADProvider
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,8 @@ class VoicePipeline:
     tts: TTSProvider
     speaker: AudioSpeaker
     vad: VADProvider | None = None
+    tool_registry: ToolRegistry = field(default_factory=default_registry)
+    confirm_tool: ConfirmationCallback | None = None
     clock: Callable[[], float] = time.perf_counter
     state: PipelineState = PipelineState.IDLE
 
@@ -52,6 +56,23 @@ class VoicePipeline:
         result = operation()
         logger.info("Latencia %-13s %.0f ms", stage, (self.clock() - started) * 1000)
         return result
+
+    def _respond(self, transcript: str) -> str:
+        """Ejecuta exclusivamente llamadas solicitadas a herramientas registradas."""
+        if not hasattr(self.llm, "respond_with_tools") or not hasattr(self.llm, "respond_after_tools"):
+            return self.llm.respond(transcript)
+        response = self.llm.respond_with_tools(transcript, self.tool_registry.specifications())
+        calls = []
+        for raw_call in response.tool_calls:
+            function = raw_call.get("function", {})
+            arguments = function.get("arguments", {})
+            if isinstance(arguments, str):
+                arguments = json.loads(arguments)
+            calls.append(ToolCall(function.get("name", ""), arguments, raw_call.get("id", "")))
+        if not calls:
+            return response.content
+        results = [self.tool_registry.invoke(call, self.confirm_tool).as_message() for call in calls]
+        return self.llm.respond_after_tools(transcript, response, results)
 
     def run_turn(self, stop_recording: threading.Event | None = None) -> str | None:
         """Ejecuta un turno completo y garantiza el retorno a estado inactivo."""
@@ -85,7 +106,7 @@ class VoicePipeline:
                 return None
             logger.info("Usuario: %s", transcript)
             self._transition(PipelineState.THINKING)
-            answer = self._timed("llm", lambda: self.llm.respond(transcript))
+            answer = self._timed("llm", lambda: self._respond(transcript))
             logger.info("M.I.L.O.: %s", answer)
             self._transition(PipelineState.SYNTHESIZING)
             self._timed("tts", lambda: self.tts.synthesize(answer, response_audio))
