@@ -19,6 +19,8 @@ class Settings:
     ollama_model: str = "llama3.2"
     piper_model: Path | None = None
     data_dir: Path = Path(".milo/audio")
+    memory_db: Path = Path(".milo/memory.sqlite3")
+    memory_max_results: int = 3
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -34,4 +36,6 @@ class Settings:
             ollama_model=os.getenv("MILO_OLLAMA_MODEL", "llama3.2"),
             piper_model=Path(piper_model) if piper_model else None,
             data_dir=Path(os.getenv("MILO_DATA_DIR", ".milo/audio")),
+            memory_db=Path(os.getenv("MILO_MEMORY_DB", ".milo/memory.sqlite3")),
+            memory_max_results=int(os.getenv("MILO_MEMORY_MAX_RESULTS", "3")),
         )

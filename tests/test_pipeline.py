@@ -6,6 +6,7 @@ import unittest
 from config import Settings
 from main import PipelineState, VoicePipeline
 from llm import LLMToolResponse
+from memory import SQLiteMemoryStore
 
 
 class Recorder:
@@ -104,6 +105,21 @@ class PipelineTests(unittest.TestCase):
         with TemporaryDirectory() as temporary:
             pipeline = VoicePipeline(Settings(data_dir=Path(temporary)), Recorder(), STT(), ToolLLM(), TTS(), Speaker())
             self.assertEqual(pipeline.run_turn(), "el resultado es 4")
+
+    def test_relevant_memories_are_added_to_the_model_prompt(self) -> None:
+        class ContextLLM(LLM):
+            def respond(self, text: str) -> str:
+                self.prompt = text
+                return "respuesta"
+
+        with TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            store = SQLiteMemoryStore(directory / "memory.sqlite3")
+            store.save("preference", "El usuario prefiere té verde", "user", 0.9)
+            llm = ContextLLM()
+            pipeline = VoicePipeline(Settings(data_dir=directory), Recorder(), STT("quiero té"), llm, TTS(), Speaker(), memory=store)
+            pipeline.run_turn()
+            self.assertIn("El usuario prefiere té verde", llm.prompt)
 
     def test_empty_transcript_skips_llm_tts_and_playback(self) -> None:
         with TemporaryDirectory() as temporary:

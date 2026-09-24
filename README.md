@@ -22,6 +22,21 @@ duración y error. Una herramienta futura marcada como irreversible o
 destructiva requiere una devolución explícita de `confirm_tool` antes de
 ejecutarse; si no existe o rechaza la llamada, se bloquea.
 
+## Memoria persistente
+
+SQLite es la fuente de verdad local en `.milo/memory.sqlite3`. Cada recuerdo
+tiene `id`, `type` (`fact`, `preference` o `event`), `content`, `timestamp`,
+`origin` y `confidence`. El almacén proporciona guardar, buscar, actualizar y
+borrar. Antes de responder recupera por coincidencia de términos un máximo de
+`MILO_MEMORY_MAX_RESULTS` recuerdos y registra el id, tipo y motivo de cada
+selección. La interfaz `EmbeddingMemoryRetriever` queda disponible para migrar
+la recuperación a embeddings/Qdrant cuando el volumen lo justifique.
+
+Los eventos de conversación no secretos se guardan automáticamente. Patrones
+de contraseñas, tokens, API keys y credenciales se rechazan por defecto, tanto
+al guardar como al actualizar; no se conservan salvo una decisión explícita de
+quien llame al almacén.
+
 ## Arquitectura
 
 Cada etapa depende de una interfaz (`Protocol`), no de una implementación de
@@ -96,6 +111,8 @@ Las grabaciones y respuestas WAV se guardan en `.milo/audio/` por defecto.
 | `MILO_OLLAMA_MODEL` | `llama3.2` | Modelo de conversación local. |
 | `MILO_PIPER_MODEL` | *(obligatorio)* | Ruta a la voz ONNX de Piper. |
 | `MILO_DATA_DIR` | `.milo/audio` | Directorio de WAV temporales. |
+| `MILO_MEMORY_DB` | `.milo/memory.sqlite3` | Archivo SQLite de memoria. |
+| `MILO_MEMORY_MAX_RESULTS` | `3` | Máximo de recuerdos recuperados por turno. |
 
 > `sounddevice` usa PortAudio del sistema. Si falta, instale el paquete de
 > PortAudio de su distribución antes de ejecutar el asistente.

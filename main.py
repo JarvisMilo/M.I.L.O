@@ -14,6 +14,7 @@ from typing import Callable
 from audio import AudioRecorder, AudioSpeaker, SoundDeviceRecorder, SoundDeviceSpeaker
 from config import Settings
 from llm import LLMProvider, OllamaLLM
+from memory import MemoryMatch, SQLiteMemoryStore
 from stt import FasterWhisperSTT, STTProvider
 from tts import PiperTTS, TTSProvider
 from tools import ConfirmationCallback, ToolCall, ToolRegistry, default_registry
@@ -44,6 +45,8 @@ class VoicePipeline:
     vad: VADProvider | None = None
     tool_registry: ToolRegistry = field(default_factory=default_registry)
     confirm_tool: ConfirmationCallback | None = None
+    memory: SQLiteMemoryStore | None = None
+    memory_max_results: int = 3
     clock: Callable[[], float] = time.perf_counter
     state: PipelineState = PipelineState.IDLE
 
@@ -57,11 +60,30 @@ class VoicePipeline:
         logger.info("Latencia %-13s %.0f ms", stage, (self.clock() - started) * 1000)
         return result
 
-    def _respond(self, transcript: str) -> str:
+    def _memory_context(self, transcript: str) -> str:
+        if self.memory is None:
+            return transcript
+        matches: list[MemoryMatch] = self.memory.search(transcript, self.memory_max_results)
+        for match in matches:
+            logger.info("Memoria seleccionada id=%s type=%s motivo=%s", match.record.id, match.record.type, match.reason)
+        if not matches:
+            return transcript
+        context = "\n".join(f"- ({match.record.type}) {match.record.content}" for match in matches)
+        return f"Contexto relevante y persistente:\n{context}\n\nConsulta actual: {transcript}"
+
+    def _save_event(self, content: str, origin: str) -> None:
+        if self.memory is None:
+            return
+        try:
+            self.memory.save("event", content, origin, confidence=0.5)
+        except ValueError as error:
+            logger.info("Evento no guardado en memoria: %s", error)
+
+    def _respond(self, prompt: str) -> str:
         """Ejecuta exclusivamente llamadas solicitadas a herramientas registradas."""
         if not hasattr(self.llm, "respond_with_tools") or not hasattr(self.llm, "respond_after_tools"):
-            return self.llm.respond(transcript)
-        response = self.llm.respond_with_tools(transcript, self.tool_registry.specifications())
+            return self.llm.respond(prompt)
+        response = self.llm.respond_with_tools(prompt, self.tool_registry.specifications())
         calls = []
         for raw_call in response.tool_calls:
             function = raw_call.get("function", {})
@@ -72,7 +94,7 @@ class VoicePipeline:
         if not calls:
             return response.content
         results = [self.tool_registry.invoke(call, self.confirm_tool).as_message() for call in calls]
-        return self.llm.respond_after_tools(transcript, response, results)
+        return self.llm.respond_after_tools(prompt, response, results)
 
     def run_turn(self, stop_recording: threading.Event | None = None) -> str | None:
         """Ejecuta un turno completo y garantiza el retorno a estado inactivo."""
@@ -105,9 +127,12 @@ class VoicePipeline:
                 logger.info("No se detectó habla; se omite LLM y TTS.")
                 return None
             logger.info("Usuario: %s", transcript)
+            self._save_event(transcript, "user")
             self._transition(PipelineState.THINKING)
-            answer = self._timed("llm", lambda: self._respond(transcript))
+            prompt = self._memory_context(transcript)
+            answer = self._timed("llm", lambda: self._respond(prompt))
             logger.info("M.I.L.O.: %s", answer)
+            self._save_event(answer, "assistant")
             self._transition(PipelineState.SYNTHESIZING)
             self._timed("tts", lambda: self.tts.synthesize(answer, response_audio))
             self._transition(PipelineState.PLAYING)
@@ -133,6 +158,8 @@ def build_pipeline(settings: Settings) -> VoicePipeline:
         tts=PiperTTS(settings.piper_model),
         speaker=SoundDeviceSpeaker(),
         vad=SileroVAD(settings.vad_threshold),
+        memory=SQLiteMemoryStore(settings.memory_db),
+        memory_max_results=settings.memory_max_results,
     )
 
 
