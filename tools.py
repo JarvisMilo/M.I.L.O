@@ -49,6 +49,7 @@ class ToolDefinition:
     parameters: JsonObject
     execute: Callable[[JsonObject], Any]
     permission: Permission = Permission.READ_ONLY
+    external_action: bool = False
 
     def as_llm_tool(self) -> JsonObject:
         return {"type": "function", "function": {"name": self.name, "description": self.description, "parameters": self.parameters}}
@@ -64,7 +65,12 @@ class ToolRegistry:
     def register(self, tool: ToolDefinition) -> None:
         if not tool.name.replace("_", "").isalnum() or tool.name in self._tools:
             raise ValueError(f"Nombre de herramienta inválido o duplicado: {tool.name}")
+        if tool.external_action and tool.permission is not Permission.CONFIRMATION_REQUIRED:
+            raise ValueError("Las acciones externas deben requerir confirmación humana.")
         self._tools[tool.name] = tool
+
+    def definition(self, name: str) -> ToolDefinition | None:
+        return self._tools.get(name)
 
     def specifications(self) -> list[JsonObject]:
         return [tool.as_llm_tool() for tool in self._tools.values()]

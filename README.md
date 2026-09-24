@@ -37,6 +37,17 @@ de contraseñas, tokens, API keys y credenciales se rechazan por defecto, tanto
 al guardar como al actualizar; no se conservan salvo una decisión explícita de
 quien llame al almacén.
 
+## Multiagente mínimo
+
+`MultiAgentOrchestrator` sólo enruta, mantiene `WorkflowState` y resume; no
+invoca tools. Incluye dos especialistas: `math` (sólo `calculate`) y `system`
+(sólo `get_current_time` y `get_runtime_info`). Las solicitudes conocidas usan
+workflows deterministas; las desconocidas sólo pasan a un `DynamicRouter`
+inyectado. Cada workflow conserva checkpoints y trazas. Un especialista no
+puede usar tools ajenas salvo que el orquestador las delegue explícitamente.
+Toda tool marcada como acción externa debe declarar `CONFIRMATION_REQUIRED` y
+recibir aprobación humana antes de ejecutarse.
+
 ## Arquitectura
 
 Cada etapa depende de una interfaz (`Protocol`), no de una implementación de
