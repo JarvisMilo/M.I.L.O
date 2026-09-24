@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import logging
 import threading
 import time
@@ -35,11 +36,8 @@ class SoundDeviceRecorder:
         sample_rate: int,
         stop_event: threading.Event | None = None,
     ) -> Path:
-        try:
-            import sounddevice as sd
-            import soundfile as sf
-        except ImportError as error:
-            raise RuntimeError("Instala sounddevice y soundfile para usar el micrófono.") from error
+        sd = importlib.import_module("sounddevice")
+        sf = importlib.import_module("soundfile")
 
         destination.parent.mkdir(parents=True, exist_ok=True)
         if seconds <= 0:
@@ -60,7 +58,7 @@ class SoundDeviceRecorder:
                     break
         if not chunks:
             raise RuntimeError("No se capturó audio del micrófono.")
-        import numpy as np
+        np = importlib.import_module("numpy")
 
         sf.write(destination, np.concatenate(chunks), sample_rate)
         return destination
@@ -68,11 +66,8 @@ class SoundDeviceRecorder:
 
 class SoundDeviceSpeaker:
     def play(self, source: Path) -> None:
-        try:
-            import sounddevice as sd
-            import soundfile as sf
-        except ImportError as error:
-            raise RuntimeError("Instala sounddevice y soundfile para usar el altavoz.") from error
+        sd = importlib.import_module("sounddevice")
+        sf = importlib.import_module("soundfile")
 
         data, sample_rate = sf.read(source, dtype="float32")
         logger.info("Reproduciendo %s", source)

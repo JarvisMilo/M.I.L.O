@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 from typing import Protocol
 
@@ -19,10 +20,10 @@ class SileroVAD:
         self._model = None
 
     def has_speech(self, audio_path: Path) -> bool:
-        try:
-            from silero_vad import get_speech_timestamps, load_silero_vad, read_audio
-        except ImportError as error:
-            raise RuntimeError("Instala silero-vad para usar la detección de voz local.") from error
+        silero_vad = importlib.import_module("silero_vad")
+        get_speech_timestamps = silero_vad.get_speech_timestamps
+        load_silero_vad = silero_vad.load_silero_vad
+        read_audio = silero_vad.read_audio
 
         if self._model is None:
             self._model = load_silero_vad()

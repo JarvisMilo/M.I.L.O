@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 from typing import Protocol
 
@@ -21,10 +22,7 @@ class FasterWhisperSTT:
         self._model = None
 
     def transcribe(self, audio_path: Path) -> str:
-        try:
-            from faster_whisper import WhisperModel
-        except ImportError as error:
-            raise RuntimeError("Instala faster-whisper para usar el proveedor STT local.") from error
+        WhisperModel = importlib.import_module("faster_whisper").WhisperModel
 
         if self._model is None:
             self._model = WhisperModel(self.model_name, device=self.device, compute_type=self.compute_type)
