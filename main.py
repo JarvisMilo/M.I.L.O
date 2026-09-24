@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from enum import Enum, auto
@@ -52,7 +53,7 @@ class VoicePipeline:
         logger.info("Latencia %-13s %.0f ms", stage, (self.clock() - started) * 1000)
         return result
 
-    def run_turn(self) -> str | None:
+    def run_turn(self, stop_recording: threading.Event | None = None) -> str | None:
         """Ejecuta un turno completo y garantiza el retorno a estado inactivo."""
         if self.state is not PipelineState.IDLE:
             raise RuntimeError("El pipeline ya está procesando un turno.")
@@ -62,7 +63,15 @@ class VoicePipeline:
         response_audio = self.settings.data_dir / f"response-{stamp}.wav"
         try:
             self._transition(PipelineState.RECORDING)
-            self._timed("grabación", lambda: self.recorder.record(recording, self.settings.record_seconds, self.settings.sample_rate))
+            self._timed(
+                "grabación",
+                lambda: self.recorder.record(
+                    recording,
+                    self.settings.record_seconds,
+                    self.settings.sample_rate,
+                    stop_recording,
+                ),
+            )
             if self.vad is not None:
                 self._transition(PipelineState.ANALYZING)
                 has_speech = self._timed("vad", lambda: self.vad.has_speech(recording))
@@ -109,9 +118,14 @@ def build_pipeline(settings: Settings) -> VoicePipeline:
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     pipeline = build_pipeline(Settings.from_env())
-    print("PTT listo. Pulsa Intro para hablar o escribe q para salir.")
+    print("PTT listo. Pulsa Intro para empezar; vuelve a pulsarlo para terminar. Escribe q para salir.")
     while input("> ").strip().lower() != "q":
-        pipeline.run_turn()
+        stop_recording = threading.Event()
+        worker = threading.Thread(target=pipeline.run_turn, args=(stop_recording,), daemon=True)
+        worker.start()
+        input("Grabando… pulsa Intro para terminar (o espera el máximo configurado). ")
+        stop_recording.set()
+        worker.join()
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import threading
 import unittest
 
 from config import Settings
@@ -7,7 +8,13 @@ from main import PipelineState, VoicePipeline
 
 
 class Recorder:
-    def record(self, destination: Path, seconds: float, sample_rate: int) -> Path:
+    def record(
+        self,
+        destination: Path,
+        seconds: float,
+        sample_rate: int,
+        stop_event: threading.Event | None = None,
+    ) -> Path:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(b"wav")
         return destination
@@ -64,6 +71,22 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(pipeline.state, PipelineState.IDLE)
             self.assertIsNotNone(speaker.played)
             self.assertTrue(speaker.played.exists())
+
+    def test_turn_passes_ptt_stop_event_to_recorder(self) -> None:
+        class PTTRecorder(Recorder):
+            def __init__(self) -> None:
+                self.stop_event: threading.Event | None = None
+
+            def record(self, destination: Path, seconds: float, sample_rate: int, stop_event: threading.Event | None = None) -> Path:
+                self.stop_event = stop_event
+                return super().record(destination, seconds, sample_rate, stop_event)
+
+        with TemporaryDirectory() as temporary:
+            recorder = PTTRecorder()
+            pipeline = VoicePipeline(Settings(data_dir=Path(temporary)), recorder, STT(), LLM(), TTS(), Speaker())
+            stop_event = threading.Event()
+            pipeline.run_turn(stop_event)
+            self.assertIs(recorder.stop_event, stop_event)
 
     def test_empty_transcript_skips_llm_tts_and_playback(self) -> None:
         with TemporaryDirectory() as temporary:

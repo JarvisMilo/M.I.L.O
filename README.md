@@ -67,14 +67,15 @@ export MILO_OLLAMA_MODEL=llama3.2
 python main.py
 ```
 
-Pulse Intro para iniciar cada turno PTT. Pulse `q` y después Intro para salir.
+Pulse Intro para iniciar cada turno PTT y vuelva a pulsarlo para terminar la
+grabación antes del límite configurado. Pulse `q` y después Intro para salir.
 Las grabaciones y respuestas WAV se guardan en `.milo/audio/` por defecto.
 
 ### Variables de entorno
 
 | Variable | Predeterminado | Uso |
 | --- | --- | --- |
-| `MILO_RECORD_SECONDS` | `5` | Duración máxima de la pulsación simulada. |
+| `MILO_RECORD_SECONDS` | `5` | Límite de seguridad para cada pulsación PTT. |
 | `MILO_SAMPLE_RATE` | `16000` | Frecuencia de grabación WAV. |
 | `MILO_VAD_THRESHOLD` | `0.5` | Umbral de detección de habla de Silero. |
 | `MILO_STT_MODEL` | `base` | Modelo Faster-Whisper. |

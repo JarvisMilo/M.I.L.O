@@ -2,3 +2,4 @@ faster-whisper>=1.1,<2
 sounddevice>=0.5,<1
 soundfile>=0.13,<1
 silero-vad>=5.1,<6
+numpy>=1.24,<3
